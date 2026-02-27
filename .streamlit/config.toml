@@ -1,0 +1,6 @@
+[tool]
+[tool.streamlit]
+runtime = "streamlit"
+server.port = 8501
+
+[packages]
