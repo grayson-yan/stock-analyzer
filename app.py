@@ -45,20 +45,20 @@ with st.sidebar:
 @st.cache_data(ttl=300)
 def get_stock_data(symbol, period):
     try:
-        stock = yf.Ticker(symbol)
+        ticker = yf.Ticker(symbol)
         if period in ["15m", "1h", "6h"]:
-            df = stock.history(period="5d", interval=period)
+            df = ticker.history(period="5d", interval=period)
         else:
-            df = stock.history(period=period)
+            df = ticker.history(period=period)
         try:
-            info = stock.info or {}
+            info = ticker.info or {}
         except:
             info = {}
-        return df, info, stock
-    except Exception as e:
-        return None, {}, None
+        return df, info
+    except:
+        return None, {}
 
-df, info, stock = get_stock_data(symbol, period)
+df, info = get_stock_data(symbol, period)
 
 if df is None or len(df) == 0:
     st.error(f"❌ 无法获取 {symbol} 的数据")
@@ -254,8 +254,8 @@ if show_fundamental:
         pe = info.get('forwardPE') or info.get('trailingPE')
         if pe and isinstance(pe, (int, float)):
             if pe < 15: fund_signal = "buy"; fund_reasons.append(f"PE低({pe:.1f})")
-            elif pe > 40: fund_signal = "sell"; fund_reasons.append(f"PE高({pe:.1f})")
-            else: fund_reasons.append(f"PE({pe:.1f})")
+            elif pe > 40: fund_signal = "sell"; fund_reasons.append(f"PE1f})")
+高({pe:.            else: fund_reasons.append(f"PE({pe:.1f})")
         
         all_signals['基本面'] = {'signal': fund_signal, 'reasons': fund_reasons}
         
@@ -407,7 +407,7 @@ periods = [("超短线(15分)", "15m"), ("短线(1小时)", "1h"), ("短波(6小
 results = []
 for name, p in periods:
     try:
-        temp_df = stock.history(period="max" if p in ["1y","2y"] else "2y", interval=p if p in ["15m","1h","6h"] else "1d")
+        temp_df = yf.Ticker(symbol).history(period="max" if p in ["1y","2y"] else "2y", interval=p if p in ["15m","1h","6h"] else "1d")
         if temp_df is not None and len(temp_df) > 10:
             ma5 = float(temp_df['Close'].rolling(5).mean().iloc[-1]) if pd.notna(temp_df['Close'].rolling(5).mean().iloc[-1]) else 0
             ma20 = float(temp_df['Close'].rolling(20).mean().iloc[-1]) if pd.notna(temp_df['Close'].rolling(20).mean().iloc[-1]) else 0
