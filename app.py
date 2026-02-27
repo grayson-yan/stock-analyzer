@@ -217,8 +217,8 @@ if show_chan:
     st.markdown("---")
     st.header("🀄 缠论分析")
     
-    fractals [], 'bottom': []}
-    for = {'top': i in range(2, len(df) - 2):
+    fractals = {'top': [], 'bottom': []}
+    for i in range(2, len(df) - 2):
         if df['High'].iloc[i-2] < df['High'].iloc[i-1] > df['High'].iloc[i] < df['High'].iloc[i+1] > df['High'].iloc[i+2]:
             fractals['top'].append((df.index[i], df['High'].iloc[i]))
         if df['Low'].iloc[i-2] > df['Low'].iloc[i-1] < df['Low'].iloc[i] > df['Low'].iloc[i+1] < df['Low'].iloc[i+2]:
