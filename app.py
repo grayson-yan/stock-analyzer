@@ -254,7 +254,7 @@ if show_fundamental:
         pe = info.get('forwardPE') or info.get('trailingPE')
         if pe and isinstance(pe, (int, float)):
             if pe < 15: fund_signal = "buy"; fund_reasons.append(f"PE低({pe:.1f})")
-            elif pe > 40: fund_signal = "sell"; fund_reasons.append(f"PE1f})")
+elif pe > 40: fund_signal = "sell"; fund_reasons.append(f"PE高({pe:.1f})")
 高({pe:.            else: fund_reasons.append(f"PE({pe:.1f})")
         
         all_signals['基本面'] = {'signal': fund_signal, 'reasons': fund_reasons}
