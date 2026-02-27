@@ -1,44 +1,23 @@
 """
 股票综合分析工具 - Streamlit App v2.0
-支持：技术面、基本面、估值、缠论、韦科夫量价分析
-新增：多周期分析、买卖信号、星级评级、深度基本面
 """
 
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
-# ==================== 页面配置 ====================
-st.set_page_config(
-    page_title="股票综合分析工具",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="股票综合分析工具", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
-# ==================== 样式 ====================
-st.markdown("""
-<style>
-    .main { background-color: #f5f5f5; }
-    .stButton>button { width: 100%; }
-    .signal-buy { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; }
-    .signal-sell { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; }
-    .signal-wait { background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; }
-</style>
-""", unsafe_allow_html=True)
+st.markdown("""<style>.main { background-color: #f5f5f5; } .stButton>button { width: 100%; }</style>""", unsafe_allow_html=True)
 
-# ==================== 标题 ====================
 st.title("📈 股票综合分析工具 Pro")
 st.markdown("**技术面 | 基本面 | 估值 | 缠论 | 韦科夫 | 深度调研**")
 
-# ==================== 侧边栏 ====================
 with st.sidebar:
     st.header("🔍 股票搜索")
-    
     symbol_input = st.text_input("输入股票代码", value="AAPL", key="symbol_input")
     search_btn = st.button("🔎 查询", type="primary")
     
@@ -49,23 +28,9 @@ with st.sidebar:
     
     st.markdown("---")
     st.header("📊 时间周期")
-    timeframe = st.selectbox(
-        "选择周期",
-        [
-            "15分钟", "1小时", "6小时",
-            "日线", "7日", "14日", "30日", 
-            "60日", "120日", "180日",
-            "1年", "2年", "3年", "5年", "10年"
-        ],
-        index=3
-    )
+    timeframe = st.selectbox("选择周期", ["15分钟", "1小时", "6小时", "日线", "7日", "14日", "30日", "60日", "120日", "180日", "1年", "2年", "3年", "5年", "10年"], index=3)
     
-    timeframe_map = {
-        "15分钟": "15m", "1小时": "1h", "6小时": "6h",
-        "日线": "1d", "7日": "7d", "14日": "14d", "30日": "30d",
-        "60日": "60d", "120日": "120d", "180日": "180d",
-        "1年": "1y", "2年": "2y", "3年": "3y", "5年": "5y", "10年": "10y"
-    }
+    timeframe_map = {"15分钟": "15m", "1小时": "1h", "6小时": "6h", "日线": "1d", "7日": "7d", "14日": "14d", "30日": "30d", "60日": "60d", "120日": "120d", "180日": "180d", "1年": "1y", "2年": "2y", "3年": "3y", "5年": "5y", "10年": "10y"}
     period = timeframe_map[timeframe]
     
     st.markdown("---")
@@ -77,7 +42,6 @@ with st.sidebar:
     show_wyckoff = st.checkbox("韦科夫量价分析", value=True)
     show_deep = st.checkbox("深度基本面分析", value=True)
 
-# ==================== 数据获取 ====================
 @st.cache_data(ttl=300)
 def get_stock_data(symbol, period):
     try:
@@ -98,36 +62,27 @@ if df is None or df.empty:
     st.info("💡 美股用 AAPL、MSFT，中概股用 0700.HK（港股）")
     st.stop()
 
-# ==================== 基本信息 ====================
 st.header(f"📊 {symbol} 概览")
-
-current_price = df['Close'].iloc[-1]
-prev_price = df['Close'].iloc[-2] if len(df) > 1 else current_price
+current_price = float(df['Close'].iloc[-1]) if pd.notna(df['Close'].iloc[-1]) else 0
+prev_price = float(df['Close'].iloc[-2]) if len(df) > 1 and pd.notna(df['Close'].iloc[-2]) else current_price
 change = current_price - prev_price
-change_pct = (change / prev_price) * 100
+change_pct = (change / prev_price) * 100 if prev_price != 0 else 0
 
 col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("当前价格", f"${current_price:.2f}", f"{change:+.2f} ({change_pct:+.2f}%)")
-with col2:
-    st.metric("最高价", f"${df['High'].max():.2f}")
-with col3:
-    st.metric("最低价", f"${df['Low'].min():.2f}")
-with col4:
-    vol = df['Volume'].iloc[-1]
+with col1: st.metric("当前价格", f"${current_price:.2f}", f"{change:+.2f} ({change_pct:+.2f}%)")
+with col2: st.metric("最高价", f"${float(df['High'].max()):.2f}")
+with col3: st.metric("最低价", f"${float(df['Low'].min()):.2f}")
+with col4: 
+    vol = float(df['Volume'].iloc[-1]) if pd.notna(df['Volume'].iloc[-1]) else 0
     st.metric("成交量", f"{vol/1e6:.2f}M" if vol > 1e6 else f"{vol/1e3:.2f}K")
 
 all_signals = {}
 
-# ==================== K线图 ====================
 st.subheader("📊 K线走势")
-fig = go.Figure(data=[go.Candlestick(
-    x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='K线'
-)])
+fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='K线')])
 fig.update_layout(title=f'{symbol} K线图 ({timeframe})', template='plotly_dark', height=500)
 st.plotly_chart(fig, use_container_width=True)
 
-# ==================== 技术指标 ====================
 if show_technical:
     st.markdown("---")
     st.header("📈 技术面分析")
@@ -157,25 +112,23 @@ if show_technical:
     
     tech_signal = "wait"
     tech_reasons = []
-    
-    ma5, ma20 = df_tech['MA5'].iloc[-1], df_tech['MA20'].iloc[-1]
-    macd, sig = df_tech['MACD'].iloc[-1], df_tech['Signal'].iloc[-1]
-    rsi = df_tech['RSI'].iloc[-1]
+    ma5 = float(df_tech['MA5'].iloc[-1]) if pd.notna(df_tech['MA5'].iloc[-1]) else 0
+    ma20 = float(df_tech['MA20'].iloc[-1]) if pd.notna(df_tech['MA20'].iloc[-1]) else 0
+    macd = float(df_tech['MACD'].iloc[-1]) if pd.notna(df_tech['MACD'].iloc[-1]) else 0
+    sig = float(df_tech['Signal'].iloc[-1]) if pd.notna(df_tech['Signal'].iloc[-1]) else 0
+    rsi = float(df_tech['RSI'].iloc[-1]) if pd.notna(df_tech['RSI'].iloc[-1]) else 50
     
     buy_cnt = 0
     if ma5 > ma20: tech_reasons.append("均线多头"); buy_cnt += 1
     else: tech_reasons.append("均线空头")
-    
     if macd > sig: tech_reasons.append("MACD金叉"); buy_cnt += 1
     else: tech_reasons.append("MACD死叉")
-    
     if rsi < 30: tech_reasons.append(f"RSI超卖({rsi:.1f})"); buy_cnt += 1
     elif rsi > 70: tech_reasons.append(f"RSI超买({rsi:.1f})"); buy_cnt -= 1
     
     tech_signal = "buy" if buy_cnt >= 2 else "sell" if buy_cnt <= 0 else "wait"
     all_signals['技术面'] = {'signal': tech_signal, 'reasons': tech_reasons}
     
-    # 均线图
     col1, col2 = st.columns([3, 1])
     with col1:
         fig_ma = go.Figure()
@@ -188,7 +141,6 @@ if show_technical:
         st.markdown("### 均线信号")
         st.success("▲ 多头" if ma5 > ma20 else "▼ 空头")
     
-    # MACD图
     col1, col2 = st.columns([3, 1])
     with col1:
         fig_macd = go.Figure()
@@ -202,7 +154,6 @@ if show_technical:
         st.markdown("### MACD信号")
         st.success("▲ 金叉" if macd > sig else "▼ 死叉")
     
-    # RSI图
     fig_rsi = go.Figure()
     fig_rsi.add_trace(go.Scatter(x=df_tech.index, y=df_tech['RSI'], name='RSI', line=dict(color='purple')))
     fig_rsi.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="超买")
@@ -212,7 +163,6 @@ if show_technical:
     
     st.markdown(f"**技术面信号：** {'🟢 买入' if tech_signal=='buy' else '🔴 卖出' if tech_signal=='sell' else '🟡 观望'} | {' / '.join(tech_reasons)}")
 
-# ==================== 缠论分析 ====================
 if show_chan:
     st.markdown("---")
     st.header("🀄 缠论分析")
@@ -228,7 +178,7 @@ if show_chan:
     chan_signal = "buy" if bot_c > top_c else "sell" if top_c > bot_c else "wait"
     chan_reasons = [f"顶分型:{top_c}", f"底分型:{bot_c}"]
     
-    recent_high, recent_low = df['High'].tail(20).max(), df['Low'].tail(20).min()
+    recent_high, recent_low = float(df['High'].tail(20).max()), float(df['Low'].tail(20).min())
     position = (current_price - recent_low) / (recent_high - recent_low) * 100 if recent_high > recent_low else 50
     chan_reasons.append(f"区间位置:{position:.0f}%")
     
@@ -243,7 +193,6 @@ if show_chan:
         st.progress(position/100)
         st.caption(f"当前在近期区间: {position:.1f}%")
     
-    # 缠论K线图
     fig_c = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='K线')])
     if fractals['top']:
         tx, ty = zip(*fractals['top'][-10:])
@@ -257,8 +206,7 @@ if show_chan:
     st.markdown("**缠论说明：** 🟢底分型=下跌结束可能反转 | 🔴顶分型=上涨结束可能回落")
     st.markdown(f"**缠论信号：** {'🟢 买入' if chan_signal=='buy' else '🔴 卖出' if chan_signal=='sell' else '🟡 观望'} | {' / '.join(chan_reasons)}")
 
-# ==================== 韦科夫 =_wyckoff===================
-if show:
+if show_wyckoff:
     st.markdown("---")
     st.header("📊 韦科夫量价分析")
     
@@ -266,23 +214,20 @@ if show:
     df_w['TypicalPrice'] = (df['High'] + df['Low'] + df['Close']) / 3
     df_w['VWAP'] = (df_w['TypicalPrice'] * df['Volume']).cumsum() / df['Volume'].cumsum()
     
-    vwap = df_w['VWAP'].iloc[-1]
-    avg_v = df['Volume'].tail(20).mean()
-    vol_r = df['Volume'].iloc[-1] / avg_v if avg_v > 0 else 1
+    vwap = float(df_w['VWAP'].iloc[-1]) if pd.notna(df_w['VWAP'].iloc[-1]) else current_price
+    avg_v = float(df['Volume'].tail(20).mean()) if pd.notna(df['Volume'].tail(20).mean()) else 1
+    vol_r = float(df['Volume'].iloc[-1]) / avg_v if avg_v > 0 else 1
     
     wyckoff_signal = "buy" if current_price > vwap and vol_r > 0.8 else "sell" if current_price < vwap else "wait"
     wyckoff_reasons = [f"{'上方' if current_price > vwap else '下方'}VWAP", f"量比:{vol_r:.2f}x"]
-    
     if vol_r > 1.5: wyckoff_reasons.append("放量")
     elif vol_r < 0.5: wyckoff_reasons.append("缩量")
     
     all_signals['韦科夫'] = {'signal': wyckoff_signal, 'reasons': wyckoff_reasons}
     
     col1, col2 = st.columns(2)
-    with col1:
-        st.success("▲ 上升趋势" if current_price > vwap else "▼ 下降趋势")
-    with col2:
-        st.info(f"量比: {vol_r:.2f}x")
+    with col1: st.success("▲ 上升趋势" if current_price > vwap else "▼ 下降趋势")
+    with col2: st.info(f"量比: {vol_r:.2f}x")
     
     fig_v = go.Figure()
     fig_v.add_trace(go.Scatter(x=df_w.index, y=df_w['Close'], name='收盘价', line=dict(color='white')))
@@ -292,7 +237,6 @@ if show:
     
     st.markdown(f"**韦科夫信号：** {'🟢 买入' if wyckoff_signal=='buy' else '🔴 卖出' if wyckoff_signal=='sell' else '🟡 观望'} | {' / '.join(wyckoff_reasons)}")
 
-# ==================== 基本面 ====================
 if show_fundamental:
     st.markdown("---")
     st.header("💰 基本面分析")
@@ -302,7 +246,6 @@ if show_fundamental:
     
     if info:
         pe = info.get('forwardPE') or info.get('trailingPE')
-        
         if pe and isinstance(pe, (int, float)):
             if pe < 15: fund_signal = "buy"; fund_reasons.append(f"PE低({pe:.1f})")
             elif pe > 40: fund_signal = "sell"; fund_reasons.append(f"PE高({pe:.1f})")
@@ -320,7 +263,6 @@ if show_fundamental:
         
         st.markdown(f"**基本面信号：** {'🟢 买入' if fund_signal=='buy' else '🔴 卖出' if fund_signal=='sell' else '🟡 观望'} | {' / '.join(fund_reasons)}")
 
-# ==================== 估值 ====================
 if show_valuation:
     st.markdown("---")
     st.header("🎯 估值分析")
@@ -333,7 +275,6 @@ if show_valuation:
     if info:
         pe = info.get('forwardPE') or info.get('trailingPE')
         eps = info.get('epsTrailingTwelveMonths')
-        
         if pe and eps:
             growth = info.get('earningsGrowth') or 0
             if isinstance(growth, (int, float)):
@@ -351,7 +292,7 @@ if show_valuation:
         all_signals['估值'] = {'signal': val_signal, 'reasons': val_reasons}
         
         col1, col2 = st.columns(2)
-        with col1:
+        with col1: 
             if dcf: st.success(f"📊 DCF估值: ${dcf:.2f}")
         with col2:
             if pos: 
@@ -360,7 +301,6 @@ if show_valuation:
         
         st.markdown(f"**估值信号：** {'🟢 买入' if val_signal=='buy' else '🔴 卖出' if val_signal=='sell' else '🟡 观望'}")
 
-# ==================== 深度基本面 ====================
 if show_deep:
     st.markdown("---")
     st.header("🔬 深度基本面分析")
@@ -369,7 +309,7 @@ if show_deep:
     deep_reasons = []
     
     if info:
-        st.markdown("### 一、主营业力（赚钱的底色）")
+        st.markdown("### 一、主营业务（赚钱的底色）")
         
         sector = info.get('sector', 'N/A')
         industry = info.get('industry', 'N/A')
@@ -427,7 +367,6 @@ if show_deep:
         
         st.markdown(f"**深度基本面信号：** {'🟢 买入' if deep_signal=='buy' else '🟡 观望'}")
 
-# ==================== 综合评级 ====================
 st.markdown("---")
 st.header("⭐ 综合评级")
 
@@ -452,23 +391,23 @@ elif star_cnt >= 4:
 else:
     st.error("⭐ **建议回避** - 多项指标显示风险")
 
-# 多周期投资评级
 st.markdown("---")
 st.header("📅 不同周期投资评级")
 
-periods = [("超短线(15分)", "15m"), ("短线(1小时)", "1h"), ("短波(6小时)", "6h"), 
-           ("日内(1日)", "1d"), ("1周内", "7d"), ("1月内", "30d"), 
-           ("季度", "90d"), ("半年", "180d"), ("1年", "1y"), ("长线(2年+)", "2y")]
+periods = [("超短线(15分)", "15m"), ("短线(1小时)", "1h"), ("短波(6小时)", "6h"), ("日内(1日)", "1d"), ("1周内", "7d"), ("1月内", "30d"), ("季度", "90d"), ("半年", "180d"), ("1年", "1y"), ("长线(2年+)", "2y")]
 
 results = []
 for name, p in periods:
     try:
         temp_df = stock.history(period="max" if p in ["1y","2y"] else "2y", interval=p if p in ["15m","1h","6h"] else "1d")
         if len(temp_df) > 10:
-            ma5 = temp_df['Close'].rolling(5).mean().iloc[-1]
-            ma20 = temp_df['Close'].rolling(20).mean().iloc[-1]
-            sig = "⭐⭐⭐⭐⭐" if ma5 > ma20 else "⭐⭐⭐" if abs(ma5-ma20)/ma20 < 0.02 else "⭐⭐"
-            results.append((name, sig, "🟢" if ma5 > ma20 else "🔴"))
+            ma5 = float(temp_df['Close'].rolling(5).mean().iloc[-1]) if pd.notna(temp_df['Close'].rolling(5).mean().iloc[-1]) else 0
+            ma20 = float(temp_df['Close'].rolling(20).mean().iloc[-1]) if pd.notna(temp_df['Close'].rolling(20).mean().iloc[-1]) else 0
+            if ma20 != 0:
+                sig = "⭐⭐⭐⭐⭐" if ma5 > ma20 else "⭐⭐⭐" if abs(ma5-ma20)/ma20 < 0.02 else "⭐⭐"
+                results.append((name, sig, "🟢" if ma5 > ma20 else "🔴"))
+            else:
+                results.append((name, "⭐⭐⭐", "🟡"))
     except:
         results.append((name, "⭐⭐⭐", "🟡"))
 
@@ -477,6 +416,5 @@ for i, (name, stars, status) in enumerate(results):
     with cols[i % 2]:
         st.markdown(f"**{name}**: {stars} {status}")
 
-# 页脚
 st.markdown("---")
 st.caption(f"📊 数据更新: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 数据源: Yahoo Finance | 仅供参考，不构成投资建议")
