@@ -50,21 +50,29 @@ def get_stock_data(symbol, period):
             df = stock.history(period="5d", interval=period)
         else:
             df = stock.history(period=period)
-        info = stock.info
+        try:
+            info = stock.info or {}
+        except:
+            info = {}
         return df, info, stock
-    except:
-        return None, None, None
+    except Exception as e:
+        return None, {}, None
 
 df, info, stock = get_stock_data(symbol, period)
 
-if df is None or df.empty:
+if df is None or len(df) == 0:
     st.error(f"❌ 无法获取 {symbol} 的数据")
     st.info("💡 美股用 AAPL、MSFT，中概股用 0700.HK（港股）")
     st.stop()
 
 st.header(f"📊 {symbol} 概览")
-current_price = float(df['Close'].iloc[-1]) if pd.notna(df['Close'].iloc[-1]) else 0
-prev_price = float(df['Close'].iloc[-2]) if len(df) > 1 and pd.notna(df['Close'].iloc[-2]) else current_price
+try:
+    current_price = float(df['Close'].iloc[-1]) if pd.notna(df['Close'].iloc[-1]) else 0
+    prev_price = float(df['Close'].iloc[-2]) if len(df) > 1 and pd.notna(df['Close'].iloc[-2]) else current_price
+except:
+    current_price = 0
+    prev_price = 0
+    
 change = current_price - prev_price
 change_pct = (change / prev_price) * 100 if prev_price != 0 else 0
 
@@ -104,11 +112,6 @@ if show_technical:
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df_tech['RSI'] = 100 - (100 / (1 + rs))
-    
-    df_tech['BB_Middle'] = df_tech['Close'].rolling(window=20).mean()
-    df_tech['BB_Std'] = df_tech['Close'].rolling(window=20).std()
-    df_tech['BB_Upper'] = df_tech['BB_Middle'] + 2 * df_tech['BB_Std']
-    df_tech['BB_Lower'] = df_tech['BB_Middle'] - 2 * df_tech['BB_Std']
     
     tech_signal = "wait"
     tech_reasons = []
@@ -168,17 +171,19 @@ if show_chan:
     st.header("🀄 缠论分析")
     
     fractals = {'top': [], 'bottom': []}
-    for i in range(2, len(df) - 2):
-        if df['High'].iloc[i-2] < df['High'].iloc[i-1] > df['High'].iloc[i] < df['High'].iloc[i+1] > df['High'].iloc[i+2]:
-            fractals['top'].append((df.index[i], df['High'].iloc[i]))
-        if df['Low'].iloc[i-2] > df['Low'].iloc[i-1] < df['Low'].iloc[i] > df['Low'].iloc[i+1] < df['Low'].iloc[i+2]:
-            fractals['bottom'].append((df.index[i], df['Low'].iloc[i]))
+    if len(df) >= 5:
+        for i in range(2, len(df) - 2):
+            if df['High'].iloc[i-2] < df['High'].iloc[i-1] > df['High'].iloc[i] < df['High'].iloc[i+1] > df['High'].iloc[i+2]:
+                fractals['top'].append((df.index[i], df['High'].iloc[i]))
+            if df['Low'].iloc[i-2] > df['Low'].iloc[i-1] < df['Low'].iloc[i] > df['Low'].iloc[i+1] < df['Low'].iloc[i+2]:
+                fractals['bottom'].append((df.index[i], df['Low'].iloc[i]))
     
     top_c, bot_c = len(fractals['top']), len(fractals['bottom'])
     chan_signal = "buy" if bot_c > top_c else "sell" if top_c > bot_c else "wait"
     chan_reasons = [f"顶分型:{top_c}", f"底分型:{bot_c}"]
     
-    recent_high, recent_low = float(df['High'].tail(20).max()), float(df['Low'].tail(20).min())
+    recent_high = float(df['High'].tail(20).max()) if len(df) >= 20 else float(df['High'].max())
+    recent_low = float(df['Low'].tail(20).min()) if len(df) >= 20 else float(df['Low'].min())
     position = (current_price - recent_low) / (recent_high - recent_low) * 100 if recent_high > recent_low else 50
     chan_reasons.append(f"区间位置:{position:.0f}%")
     
@@ -243,8 +248,9 @@ if show_fundamental:
     
     fund_signal = "wait"
     fund_reasons = []
+    pe = None
     
-    if info:
+    if info and isinstance(info, dict):
         pe = info.get('forwardPE') or info.get('trailingPE')
         if pe and isinstance(pe, (int, float)):
             if pe < 15: fund_signal = "buy"; fund_reasons.append(f"PE低({pe:.1f})")
@@ -255,13 +261,15 @@ if show_fundamental:
         
         col1, col2, col3, col4 = st.columns(4)
         with col1: st.metric("PE", f"{pe:.2f}" if pe else "N/A")
-        with col2: st.metric("PB", f"{info.get('priceToBook', 'N/A')}")
+        with col2: st.metric("PB", f"{info.get('priceToBook', 'N/A')}" if info else "N/A")
         with col3: 
-            mc = info.get('marketCap')
+            mc = info.get('marketCap') if info else None
             st.metric("市值", f"${mc/1e9:.1f}B" if mc else "N/A")
-        with col4: st.metric("股息率", f"{info.get('dividendYield', 0)*100:.2f}%" if info.get('dividendYield') else "N/A")
+        with col4: 
+            dy = info.get('dividendYield') if info else None
+            st.metric("股息率", f"{dy*100:.2f}%" if dy else "N/A")
         
-        st.markdown(f"**基本面信号：** {'🟢 买入' if fund_signal=='buy' else '🔴 卖出' if fund_signal=='sell' else '🟡 观望'} | {' / '.join(fund_reasons)}")
+        st.markdown(f"**基本面信号：** {'🟢 买入' if fund_signal=='buy' else '🔴 卖出' if fund_signal=='sell' else '🟡 观望'} | {' / '.join(fund_reasons) if fund_reasons else '数据不足'}")
 
 if show_valuation:
     st.markdown("---")
@@ -272,7 +280,7 @@ if show_valuation:
     dcf = None
     pos = None
     
-    if info:
+    if info and isinstance(info, dict):
         pe = info.get('forwardPE') or info.get('trailingPE')
         eps = info.get('epsTrailingTwelveMonths')
         if pe and eps:
@@ -308,12 +316,12 @@ if show_deep:
     deep_signal = "wait"
     deep_reasons = []
     
-    if info:
+    if info and isinstance(info, dict):
         st.markdown("### 一、主营业务（赚钱的底色）")
         
-        sector = info.get('sector', 'N/A')
-        industry = info.get('industry', 'N/A')
-        business = info.get('businessSummary', '暂无')[:300]
+        sector = info.get('sector', 'N/A') if info else 'N/A'
+        industry = info.get('industry', 'N/A') if info else 'N/A'
+        business = info.get('businessSummary', '暂无')[:300] if info else '暂无'
         
         col1, col2 = st.columns(2)
         with col1: st.metric("行业", sector)
@@ -400,7 +408,7 @@ results = []
 for name, p in periods:
     try:
         temp_df = stock.history(period="max" if p in ["1y","2y"] else "2y", interval=p if p in ["15m","1h","6h"] else "1d")
-        if len(temp_df) > 10:
+        if temp_df is not None and len(temp_df) > 10:
             ma5 = float(temp_df['Close'].rolling(5).mean().iloc[-1]) if pd.notna(temp_df['Close'].rolling(5).mean().iloc[-1]) else 0
             ma20 = float(temp_df['Close'].rolling(20).mean().iloc[-1]) if pd.notna(temp_df['Close'].rolling(20).mean().iloc[-1]) else 0
             if ma20 != 0:
