@@ -93,13 +93,28 @@ def get_stock_code(user_input):
 @st.cache_data(ttl=300)
 def get_stock_data(symbol, period="1y"):
     try:
+        import requests
+        # 尝试Yahoo Finance
         ticker = yf.Ticker(symbol)
-        df = ticker.history(period=period)
+        df = ticker.history(period=period, timeout=10)
         info = {}
-        try: info = ticker.info or {}
-        except: pass
+        try: 
+            info = ticker.info or {}
+        except: 
+            pass
+        
+        if df is None or len(df) == 0:
+            # 备用：尝试直接下载
+            url = f"https://query1.finance.yahoo.com/v7/finance/download/{symbol}?period1=0&period2=9999999999&interval=1d&events=history"
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            resp = requests.get(url, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                from io import StringIO
+                df = pd.read_csv(StringIO(resp.text), parse_dates=['Date'], index_col='Date')
+        
         return df, info
-    except: return None, {}
+    except Exception as e:
+        return None, {"error": str(e)}
 
 def calculate_indicators(df):
     d = df.copy()
@@ -357,6 +372,10 @@ def main():
     
     if df is None or len(df) == 0:
         st.error("❌ 无法获取数据")
+        # 显示详细错误信息
+        if info.get("error"):
+            st.info(f"错误原因: {info.get('error')}")
+        st.warning("可能原因：部署服务器网络受限无法访问Yahoo Finance。建议：1)本地运行 2)换用其他数据源")
         return
     
     current_price = df['Close'].iloc[-1]
